@@ -133,6 +133,16 @@ if not sdist_enabled
     kwargs: ffms2_lib_kwargs,
   )
 
+  ffms2_static_lib = static_library(
+    'ffms2_static',
+    ffms2_src,
+    cpp_args: global_cpp_private_args + ffms2_cpp_static_args,
+    dependencies: ffms2_deps,
+    gnu_symbol_visibility: 'hidden',
+    include_directories: includes,
+    install: false,
+  )
+
   executable(
     'ffmsindex',
     ffmsindex_src,
@@ -142,7 +152,7 @@ if not sdist_enabled
     include_directories: includes,
     install: true,
     link_args: ffmsindex_link_args,
-    link_with: ffms2_lib,
+    link_with: ffms2_static_lib,
   )
 
   static_cflags = []
