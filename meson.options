@@ -1,3 +1,18 @@
-option('avisynth', type: 'boolean', value : false, description: 'Enable avisynth')
-option('test', type: 'boolean', value : false, description: 'Enable test')
-option('wheel', type: 'boolean', value: false, description: 'Enable Python plugin')
+option(
+    'avisynth',
+    type: 'boolean',
+    value: false,
+    description: 'Enable avisynth',
+)
+option(
+    'test',
+    type: 'boolean',
+    value: false,
+    description: 'Enable test',
+)
+option(
+    'wheel',
+    type: 'boolean',
+    value: false,
+    description: 'Enable Python plugin',
+)

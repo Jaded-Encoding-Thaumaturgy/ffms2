@@ -1,16 +1,16 @@
 project(
     'ffms2',
     'cpp',
-    default_options : [
+    default_options: [
         'buildtype=release',
         'warning_level=2',
         'b_ndebug=if-release',
-        'cpp_std=gnu++14,c++14'
+        'cpp_std=gnu++14,c++14',
     ],
-    license : 'MIT',
-    license_files : 'COPYING',
-    meson_version : '>=1.3.0',
-    version : '5.1.2'
+    license: 'MIT',
+    license_files: 'COPYING',
+    meson_version: '>=1.3.0',
+    version: '5.1.2',
 )
 
 wheel_enabled = get_option('wheel')
@@ -44,20 +44,18 @@ if host_machine.system() == 'windows' and cpp_compiler.has_argument('-municode')
     ffmsindex_link_args += ['-municode']
 endif
 
-libavutil_dep = dependency('libavutil', version : '>=59.39.0')
+libavutil_dep = dependency('libavutil', version: '>=59.39.0')
 
 ffms2_deps = [
-    dependency('libavformat', version : '>=61.7.0'),
-    dependency('libavcodec', version : '>=61.19.0'),
-    dependency('libswscale', version : '>=8.3.0'),
+    dependency('libavformat', version: '>=61.7.0'),
+    dependency('libavcodec', version: '>=61.19.0'),
+    dependency('libswscale', version: '>=8.3.0'),
     libavutil_dep,
-    dependency('libswresample', version : '>=5.3.0'),
-    dependency('zlib')
+    dependency('libswresample', version: '>=5.3.0'),
+    dependency('zlib'),
 ]
 
-ffmsindex_deps = [
-    libavutil_dep
-]
+ffmsindex_deps = [libavutil_dep]
 
 ffms2_src = [
     'src/core/audiosource.cpp',
@@ -85,10 +83,13 @@ ffms2_src = [
 ]
 
 if get_option('avisynth')
-    avisynth_dep = dependency('avisynth', required : false, version : '>=3.7.3')
+    avisynth_dep = dependency('avisynth', required: false, version: '>=3.7.3')
 
     if avisynth_dep.found()
-        avisynth_dep = avisynth_dep.partial_dependency(compile_args: true, includes: true)
+        avisynth_dep = avisynth_dep.partial_dependency(
+            compile_args: true,
+            includes: true,
+        )
     else
         avisynth_subproject = subproject('AviSynth+')
         avisynth_dep = avisynth_subproject.get_variable('avisynth_headers_dep')
@@ -103,42 +104,41 @@ if get_option('avisynth')
     ]
 endif
 
-ffmsindex_src = [
-  'src/index/ffmsindex.cpp',
-  'src/index/vsutf16.h'
-]
+ffmsindex_src = ['src/index/ffmsindex.cpp', 'src/index/vsutf16.h']
 
 includes = include_directories('include')
 
 ffms2_lib_kwargs = {}
 if wheel_enabled
     py = import('python').find_installation(pure: false)
-    ffms2_lib_kwargs = {'install_dir': py.get_install_dir() / 'vapoursynth/plugins'}
+    ffms2_lib_kwargs = {
+        'install_dir': py.get_install_dir() / 'vapoursynth/plugins',
+    }
 endif
 
 ffms2_lib = library(
     'ffms2',
     ffms2_src,
-    cpp_args : global_cpp_private_args,
-    cpp_static_args : ffms2_cpp_static_args,
-    dependencies : ffms2_deps,
-    gnu_symbol_visibility : 'hidden',
-    include_directories : includes,
-    install : true,
-    link_args : ffms2_link_args,
-    kwargs : ffms2_lib_kwargs,
+    cpp_args: global_cpp_private_args,
+    cpp_static_args: ffms2_cpp_static_args,
+    dependencies: ffms2_deps,
+    gnu_symbol_visibility: 'hidden',
+    include_directories: includes,
+    install: true,
+    link_args: ffms2_link_args,
+    kwargs: ffms2_lib_kwargs,
 )
 
 executable(
     'ffmsindex',
     ffmsindex_src,
-    cpp_args : global_cpp_private_args,
-    dependencies : ffmsindex_deps,
-    gnu_symbol_visibility : 'hidden',
-    include_directories : includes,
-    install : not wheel_enabled,
-    link_args : ffmsindex_link_args,
-    link_with : ffms2_lib,
+    cpp_args: global_cpp_private_args,
+    dependencies: ffmsindex_deps,
+    gnu_symbol_visibility: 'hidden',
+    include_directories: includes,
+    install: not wheel_enabled,
+    link_args: ffmsindex_link_args,
+    link_with: ffms2_lib,
 )
 
 static_cflags = []
@@ -152,23 +152,28 @@ if not wheel_enabled
     pkg_config = import('pkgconfig')
     pkg_config.generate(
         ffms2_lib,
-        description : 'The Fabulous FM Library 2',
-        extra_cflags : static_cflags,
+        description: 'The Fabulous FM Library 2',
+        extra_cflags: static_cflags,
     )
 endif
 
 # TODO - When meson implement a way to specify a static compile args, we will need to add the flag "-DFFMS_STATIC".
 # See: https://github.com/mesonbuild/meson/issues/5723
 ffms2_dep = declare_dependency(
-    link_with : ffms2_lib,
-    include_directories : includes,
-    compile_args : static_cflags,
+    link_with: ffms2_lib,
+    include_directories: includes,
+    compile_args: static_cflags,
 )
 meson.override_dependency('ffms2', ffms2_dep)
 
 install_data(
-    ['doc/ffms2-api.md', 'doc/ffms2-avisynth.md', 'doc/ffms2-changelog.md', 'doc/ffms2-vapoursynth.md'],
-    install_dir : join_paths(get_option('datadir'), 'doc', 'ffms2')
+    [
+        'doc/ffms2-api.md',
+        'doc/ffms2-avisynth.md',
+        'doc/ffms2-changelog.md',
+        'doc/ffms2-vapoursynth.md',
+    ],
+    install_dir: join_paths(get_option('datadir'), 'doc', 'ffms2'),
 )
 
 install_headers(['include/ffms.h', 'include/ffmscompat.h'])
