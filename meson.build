@@ -140,7 +140,7 @@ if not sdist_enabled
     dependencies: ffmsindex_deps,
     gnu_symbol_visibility: 'hidden',
     include_directories: includes,
-    install: not wheel_enabled,
+    install: true,
     link_args: ffmsindex_link_args,
     link_with: ffms2_lib,
   )
