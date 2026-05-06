@@ -16,3 +16,9 @@ option(
     value: false,
     description: 'Enable Python plugin',
 )
+option(
+    'sdist',
+    type: 'boolean',
+    value: false,
+    description: 'Configure only enough targets to build a source distribution',
+)
