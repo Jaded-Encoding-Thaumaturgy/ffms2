@@ -1,24 +1,24 @@
 option(
-    'avisynth',
-    type: 'boolean',
-    value: false,
-    description: 'Enable avisynth',
+  'avisynth',
+  type: 'boolean',
+  value: false,
+  description: 'Enable avisynth',
 )
 option(
-    'test',
-    type: 'boolean',
-    value: false,
-    description: 'Enable test',
+  'test',
+  type: 'boolean',
+  value: false,
+  description: 'Enable test',
 )
 option(
-    'wheel',
-    type: 'boolean',
-    value: false,
-    description: 'Enable Python plugin',
+  'wheel',
+  type: 'boolean',
+  value: false,
+  description: 'Enable Python plugin',
 )
 option(
-    'sdist',
-    type: 'boolean',
-    value: false,
-    description: 'Configure only enough targets to build a source distribution',
+  'sdist',
+  type: 'boolean',
+  value: false,
+  description: 'Configure only enough targets to build a source distribution',
 )
