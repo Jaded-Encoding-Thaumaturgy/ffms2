@@ -33,7 +33,14 @@ jobs:
         uses: actions/cache@v5
         with:
           path: vcpkg_installed
-          key: vcpkg-${{ matrix.vcpkg_triplet }}-${{ hashFiles('vcpkg.json', 'vcpkg-triplets/*.cmake') }}
+          key: >-
+            ${{
+              format(
+                'vcpkg-{0}-{1}',
+                matrix.vcpkg_triplet,
+                hashFiles('vcpkg.json', format('vcpkg-triplets/{0}.cmake', matrix.vcpkg_triplet))
+              )
+            }}
 
       - name: Install vcpkg packages
         run: |

@@ -68,7 +68,15 @@ jobs:
         uses: actions/cache/restore@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
         with:
           path: vcpkg_installed
-          key: vcpkg-${{ matrix.vcpkg_triplet }}-${{ env.VCPKG_COMMIT }}-${{ hashFiles('vcpkg.json', 'vcpkg-triplets/*.cmake') }}
+          key: >-
+            ${{
+              format(
+                'vcpkg-{0}-{1}-{2}',
+                matrix.vcpkg_triplet,
+                env.VCPKG_COMMIT,
+                hashFiles('vcpkg.json', format('vcpkg-triplets/{0}.cmake', matrix.vcpkg_triplet))
+              )
+            }}
 
       - name: Install vcpkg packages
         if: steps.cache.outputs.cache-hit != 'true'
@@ -88,7 +96,15 @@ jobs:
         uses: actions/cache/save@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
         with:
           path: vcpkg_installed
-          key: vcpkg-${{ matrix.vcpkg_triplet }}-${{ env.VCPKG_COMMIT }}-${{ hashFiles('vcpkg.json', 'vcpkg-triplets/*.cmake') }}
+          key: >-
+            ${{
+              format(
+                'vcpkg-{0}-{1}-{2}',
+                matrix.vcpkg_triplet,
+                env.VCPKG_COMMIT,
+                hashFiles('vcpkg.json', format('vcpkg-triplets/{0}.cmake', matrix.vcpkg_triplet))
+              )
+            }}
 
       - name: Build wheel
         run: uv build --wheel
