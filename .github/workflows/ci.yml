@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - master
+    tags:
+      - "v*"
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    uses: ./.github/workflows/ci-build-windows.yml
+
+  build-linux:
+    uses: ./.github/workflows/ci-build-linux.yml
+
+  build-macos:
+    uses: ./.github/workflows/ci-build-macos.yml
+
+  build-sdist:
+    name: Build sdist
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+        with:
+          python-version: "3.12"
+
+      - name: Build wheel
+        run: uv build --sdist
+
+      - name: Upload sdist
+        uses: actions/upload-artifact@v7
+        with:
+          name: sdist-${{ matrix.name }}
+          path: dist/*.gz
