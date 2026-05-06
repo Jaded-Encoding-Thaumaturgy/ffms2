@@ -13,7 +13,7 @@ project(
     version : '5.1.2'
 )
 
-wheel_enabled = get_option('wheel').enabled()
+wheel_enabled = get_option('wheel')
 
 cpp_compiler = meson.get_compiler('cpp')
 
@@ -84,7 +84,7 @@ ffms2_src = [
     'src/vapoursynth/vapoursynth4.cpp',
 ]
 
-if get_option('avisynth').enabled()
+if get_option('avisynth')
     avisynth_dep = dependency('avisynth', required : false, version : '>=3.7.3')
 
     if avisynth_dep.found()
@@ -173,6 +173,6 @@ install_data(
 
 install_headers(['include/ffms.h', 'include/ffmscompat.h'])
 
-if get_option('test').enabled()
+if get_option('test')
     subdir('test')
 endif
