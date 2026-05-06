@@ -1,0 +1,27 @@
+{
+  "name": "ffms2",
+  "version-string": "5.1.2",
+  "dependencies": [
+    {
+      "name": "ffmpeg",
+      "default-features": false,
+      "features": [
+        "avcodec",
+        "avdevice",
+        "avfilter",
+        "avformat",
+        "swresample",
+        "swscale",
+        "zlib",
+        "bzip2",
+        "dav1d",
+        "gpl",
+        "version3",
+        "lzma",
+        "openssl",
+        "xml2"
+      ]
+    },
+    "pkgconf"
+  ]
+}

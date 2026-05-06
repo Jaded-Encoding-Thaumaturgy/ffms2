@@ -1,0 +1,109 @@
+name: Build Linux Wheel
+
+on:
+  workflow_call:
+  workflow_dispatch:
+
+env:
+  VCPKG_COMMIT: 56bb2411609227288b70117ead2c47585ba07713
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: manylinux x86_64
+            os: ubuntu-24.04
+            container: quay.io/pypa/manylinux_2_28_x86_64
+            vcpkg_triplet: x64-linux-release
+
+          - name: manylinux aarch64
+            os: ubuntu-24.04-arm
+            container: quay.io/pypa/manylinux_2_28_aarch64
+            vcpkg_triplet: arm64-linux-release
+
+          - name: musllinux x86_64
+            os: ubuntu-24.04
+            container: quay.io/pypa/musllinux_1_2_x86_64
+            vcpkg_triplet: x64-linux-musl-release
+
+    name: Build wheel ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    container: ${{ matrix.container }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+        with:
+          python-version: "3.12"
+
+      - name: Install system dependencies (manylinux)
+        if: ${{ startsWith(matrix.name, 'manylinux') }}
+        run: dnf install -y git curl zip unzip tar zstd gcc gcc-c++ make cmake nasm perl perl-IPC-Cmd kernel-headers
+
+      - name: Install system dependencies (musllinux)
+        if: ${{ startsWith(matrix.name, 'musllinux') }}
+        run: apk add --no-cache git zip unzip tar zstd curl build-base cmake nasm perl perl-utils linux-headers
+
+      - name: Install up to date meson and Ninja
+        run: |
+          uv tool install meson
+          uv tool install ninja
+
+      - name: Install vcpkg
+        run: |
+          git clone https://github.com/microsoft/vcpkg.git
+          git -C vcpkg -c advice.detachedHead=false checkout --quiet "$VCPKG_COMMIT"
+          vcpkg/bootstrap-vcpkg.sh
+
+          echo "VCPKG_ROOT=$PWD/vcpkg" >> $GITHUB_ENV
+          echo "$PWD/vcpkg" >> $GITHUB_PATH
+
+      - name: Restore vcpkg packages
+        id: cache
+        uses: actions/cache/restore@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
+        with:
+          path: vcpkg_installed
+          key: vcpkg-${{ matrix.vcpkg_triplet }}-${{ env.VCPKG_COMMIT }}-${{ hashFiles('vcpkg.json', 'vcpkg-triplets/*.cmake') }}
+
+      - name: Install vcpkg packages
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: |
+          "$VCPKG_ROOT/vcpkg" install \
+            --triplet ${{ matrix.vcpkg_triplet }} \
+            --overlay-triplets=vcpkg-triplets \
+            --x-install-root=vcpkg_installed
+        env:
+          VCPKG_FORCE_SYSTEM_BINARIES: 1
+
+      - name: Set up vcpkg packages
+        run: echo "PKG_CONFIG_PATH=$PWD/vcpkg_installed/${{ matrix.vcpkg_triplet }}/lib/pkgconfig" >> $GITHUB_ENV
+
+      - name: Save vcpkg packages
+        if: steps.cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
+        with:
+          path: vcpkg_installed
+          key: vcpkg-${{ matrix.vcpkg_triplet }}-${{ env.VCPKG_COMMIT }}-${{ hashFiles('vcpkg.json', 'vcpkg-triplets/*.cmake') }}
+
+      - name: Build wheel
+        run: uv build --wheel
+
+      - name: Repair wheel
+        run: |
+          uvx --with patchelf auditwheel repair --strip dist/*.whl -w repaired_wheels
+          rm dist/*.whl
+          mv repaired_wheels/*.whl dist/
+
+      - name: Repair wheel tags
+        run: uvx wheel tags --python-tag py3 --abi-tag none dist/*.whl --remove
+
+      - name: Upload wheel
+        uses: actions/upload-artifact@v7
+        with:
+          name: wheel-${{ matrix.name }}
+          path: dist/*.whl

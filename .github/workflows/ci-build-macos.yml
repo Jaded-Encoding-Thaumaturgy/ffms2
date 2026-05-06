@@ -1,0 +1,64 @@
+name: Build macOS Wheel
+
+on:
+  workflow_call:
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: macOS x86_64
+            os: macos-26-intel
+            vcpkg_triplet: x64-osx-release
+          - name: macOS arm64
+            os: macos-26
+            vcpkg_triplet: arm64-osx-release
+
+    name: Build wheel ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+        with:
+          python-version: "3.12"
+
+      - name: Cache vcpkg packages
+        uses: actions/cache@v5
+        with:
+          path: vcpkg_installed
+          key: vcpkg-${{ matrix.vcpkg_triplet }}-${{ hashFiles('vcpkg.json', 'vcpkg-triplets/*.cmake') }}
+
+      - name: Install vcpkg packages
+        run: |
+          brew install nasm
+          vcpkg install \
+            --triplet ${{ matrix.vcpkg_triplet }} \
+            --overlay-triplets=vcpkg-triplets \
+            --x-install-root=vcpkg_installed
+        env:
+          VCPKG_ROOT: /usr/local/share/vcpkg
+
+      - name: Build wheels
+        uses: pypa/cibuildwheel@v3.4
+        env:
+          CIBW_BUILD: cp312-*
+          CIBW_BUILD_FRONTEND: build[uv]
+          CIBW_ENVIRONMENT: >
+            PKG_CONFIG_PATH="${{ github.workspace }}/vcpkg_installed/${{ matrix.vcpkg_triplet }}/lib/pkgconfig"
+            MACOSX_DEPLOYMENT_TARGET=13
+
+      - name: Repair wheel tags
+        run: uvx wheel tags --python-tag py3 --abi-tag none wheelhouse/*.whl --remove
+
+      - name: Upload wheel
+        uses: actions/upload-artifact@v7
+        with:
+          name: wheel-${{ runner.os }}-${{ runner.arch }}
+          path: ./wheelhouse/*.whl
