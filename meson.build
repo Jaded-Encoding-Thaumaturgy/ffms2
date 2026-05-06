@@ -13,7 +13,7 @@ project(
     version : '5.1.2'
 )
 
-python_plugin_enabled = get_option('python_plugin').enabled()
+wheel_enabled = get_option('wheel').enabled()
 
 cpp_compiler = meson.get_compiler('cpp')
 
@@ -111,7 +111,7 @@ ffmsindex_src = [
 includes = include_directories('include')
 
 ffms2_lib_kwargs = {}
-if python_plugin_enabled
+if wheel_enabled
     py = import('python').find_installation(pure: false)
     ffms2_lib_kwargs = {'install_dir': py.get_install_dir() / 'vapoursynth/plugins'}
 endif
@@ -136,7 +136,7 @@ executable(
     dependencies : ffmsindex_deps,
     gnu_symbol_visibility : 'hidden',
     include_directories : includes,
-    install : not python_plugin_enabled,
+    install : not wheel_enabled,
     link_args : ffmsindex_link_args,
     link_with : ffms2_lib,
 )
@@ -146,7 +146,7 @@ if get_option('default_library') == 'static'
     static_cflags += '-DFFMS_STATIC'
 endif
 
-if not python_plugin_enabled
+if not wheel_enabled
     # TODO - When meson implement a way to specify element in the field "Cflags.private", we will need to add the flag "-DFFMS_STATIC".
     # See: https://github.com/mesonbuild/meson/issues/14749
     pkg_config = import('pkgconfig')
