@@ -41,7 +41,7 @@ jobs:
           path: dist/*.gz
 
   publish:
-    name: Publish
+    name: Publish to vs-wheels
     needs:
       - build-windows
       - build-linux
@@ -58,7 +58,40 @@ jobs:
           path: dist
           merge-multiple: true
 
+      - name: Determine version
+        id: version
+        run: |
+          WHEEL=$(ls dist/*.whl | head -1)
+          VERSION=$(basename "$WHEEL" | sed 's/^[^-]*-\([^-]*\)-.*/\1/')
+          TAG="vapoursynth-ffms2-v$VERSION"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "Detected version: $VERSION"
+          echo "Release tag: $TAG"
+
       - name: Upload to GitHub Release
         uses: softprops/action-gh-release@v3
         with:
+          repository: Jaded-Encoding-Thaumaturgy/vs-wheels
+          token: ${{ secrets.VS_WHEELS_RELEASE_TOKEN }}
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: vapoursynth-ffms2 ${{ steps.version.outputs.version }}
           files: dist/*
+          body: vapoursynth-ffms2 ${{ steps.version.outputs.version }}
+          fail_on_unmatched_files: true
+          generate_release_notes: false
+
+  trigger-index:
+    name: Trigger vs-wheels index
+    needs: publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Repository Dispatch
+        uses: peter-evans/repository-dispatch@28959ce8df70de7be546dd1250a005dd32156697 # v4
+        with:
+          token: ${{ secrets.VS_WHEELS_RELEASE_TOKEN }}
+          repository: Jaded-Encoding-Thaumaturgy/vs-wheels
+          event-type: index
