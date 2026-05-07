@@ -109,11 +109,22 @@ jobs:
       - name: Build wheel
         run: uv build --wheel
 
-      - name: Repair wheel
+      - name: Repair wheel (manylinux)
+        if: ${{ startsWith(matrix.name, 'manylinux') }}
         run: |
           uvx --with patchelf auditwheel repair --strip dist/*.whl -w repaired_wheels
           rm dist/*.whl
           mv repaired_wheels/*.whl dist/
+
+      - name: Repair wheel (musllinux)
+        if: ${{ startsWith(matrix.name, 'musllinux') }}
+        run: |
+          uvx --with patchelf auditwheel repair dist/*.whl -w repaired_wheels
+          uvx wheel unpack repaired_wheels/*.whl -d repaired_wheels/unpacked
+          find repaired_wheels/unpacked -type f \( -name '*.so' -o -name '*.so.*' \) -print -exec strip -s {} +
+          rm dist/*.whl
+          rm repaired_wheels/*.whl
+          uvx wheel pack repaired_wheels/unpacked/* -d dist/
 
       - name: Repair wheel tags
         run: uvx wheel tags --python-tag py3 --abi-tag none dist/*.whl --remove
