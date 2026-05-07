@@ -10,7 +10,7 @@ project(
   license: 'MIT',
   license_files: 'COPYING',
   meson_version: '>=1.3.0',
-  version: '5.2.0.dev0',
+  version: '5.2.0.dev1',
 )
 
 wheel_enabled = get_option('wheel')
