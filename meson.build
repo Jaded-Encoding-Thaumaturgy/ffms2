@@ -10,7 +10,7 @@ project(
   license: 'MIT',
   license_files: 'COPYING',
   meson_version: '>=1.3.0',
-  version: '5.1.2',
+  version: '5.2.0.dev0',
 )
 
 wheel_enabled = get_option('wheel')
@@ -189,6 +189,13 @@ install_data(
     'doc/ffms2-vapoursynth.md',
   ],
   install_dir: join_paths(get_option('datadir'), 'doc', 'ffms2'),
+)
+
+install_headers(['include/ffms.h', 'include/ffmscompat.h'])
+
+if not sdist_enabled and get_option('test')
+  subdir('test')
+endifall_dir: join_paths(get_option('datadir'), 'doc', 'ffms2'),
 )
 
 install_headers(['include/ffms.h', 'include/ffmscompat.h'])
