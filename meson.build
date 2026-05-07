@@ -195,11 +195,4 @@ install_headers(['include/ffms.h', 'include/ffmscompat.h'])
 
 if not sdist_enabled and get_option('test')
   subdir('test')
-endifall_dir: join_paths(get_option('datadir'), 'doc', 'ffms2'),
-)
-
-install_headers(['include/ffms.h', 'include/ffmscompat.h'])
-
-if not sdist_enabled and get_option('test')
-  subdir('test')
 endif
