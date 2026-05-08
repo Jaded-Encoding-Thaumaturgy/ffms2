@@ -4,9 +4,6 @@ on:
   workflow_call:
   workflow_dispatch:
 
-env:
-  VCPKG_COMMIT: 56bb2411609227288b70117ead2c47585ba07713
-
 jobs:
   build:
     strategy:
@@ -54,57 +51,14 @@ jobs:
           uv tool install meson
           uv tool install ninja
 
-      - name: Install vcpkg
-        run: |
-          git clone https://github.com/microsoft/vcpkg.git
-          git -C vcpkg -c advice.detachedHead=false checkout --quiet "$VCPKG_COMMIT"
-          vcpkg/bootstrap-vcpkg.sh
-
-          echo "VCPKG_ROOT=$PWD/vcpkg" >> $GITHUB_ENV
-          echo "$PWD/vcpkg" >> $GITHUB_PATH
-
-      - name: Restore vcpkg packages
-        id: cache
-        uses: actions/cache/restore@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
+      - name: Set up vcpkg
+        uses: ./.github/actions/setup-vcpkg
         with:
-          path: vcpkg_installed
-          key: >-
-            ${{
-              format(
-                'vcpkg-{0}-{1}-{2}',
-                matrix.vcpkg_triplet,
-                env.VCPKG_COMMIT,
-                hashFiles('vcpkg.json', format('vcpkg-triplets/{0}.cmake', matrix.vcpkg_triplet))
-              )
-            }}
-
-      - name: Install vcpkg packages
-        if: steps.cache.outputs.cache-hit != 'true'
-        run: |
-          "$VCPKG_ROOT/vcpkg" install \
-            --triplet ${{ matrix.vcpkg_triplet }} \
-            --overlay-triplets=vcpkg-triplets \
-            --x-install-root=vcpkg_installed
-        env:
-          VCPKG_FORCE_SYSTEM_BINARIES: 1
+          triplet: ${{ matrix.vcpkg_triplet }}
+          commit: ${{ vars.VCPKG_COMMIT }}
 
       - name: Set up vcpkg packages
         run: echo "PKG_CONFIG_PATH=$PWD/vcpkg_installed/${{ matrix.vcpkg_triplet }}/lib/pkgconfig" >> $GITHUB_ENV
-
-      - name: Save vcpkg packages
-        if: steps.cache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
-        with:
-          path: vcpkg_installed
-          key: >-
-            ${{
-              format(
-                'vcpkg-{0}-{1}-{2}',
-                matrix.vcpkg_triplet,
-                env.VCPKG_COMMIT,
-                hashFiles('vcpkg.json', format('vcpkg-triplets/{0}.cmake', matrix.vcpkg_triplet))
-              )
-            }}
 
       - name: Build wheel
         run: uv build --wheel

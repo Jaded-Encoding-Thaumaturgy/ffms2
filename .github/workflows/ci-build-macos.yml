@@ -29,28 +29,11 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Cache vcpkg packages
-        uses: actions/cache@v5
+      - name: Set up vcpkg
+        uses: ./.github/actions/setup-vcpkg
         with:
-          path: vcpkg_installed
-          key: >-
-            ${{
-              format(
-                'vcpkg-{0}-{1}',
-                matrix.vcpkg_triplet,
-                hashFiles('vcpkg.json', format('vcpkg-triplets/{0}.cmake', matrix.vcpkg_triplet))
-              )
-            }}
-
-      - name: Install vcpkg packages
-        run: |
-          brew install nasm
-          vcpkg install \
-            --triplet ${{ matrix.vcpkg_triplet }} \
-            --overlay-triplets=vcpkg-triplets \
-            --x-install-root=vcpkg_installed
-        env:
-          VCPKG_ROOT: /usr/local/share/vcpkg
+          triplet: ${{ matrix.vcpkg_triplet }}
+          commit: ${{ vars.VCPKG_COMMIT }}
 
       - name: Build wheels
         uses: pypa/cibuildwheel@v3.4
@@ -67,5 +50,5 @@ jobs:
       - name: Upload wheel
         uses: actions/upload-artifact@v7
         with:
-          name: wheel-${{ runner.os }}-${{ runner.arch }}
+          name: wheel-${{ matrix.name }}
           path: ./wheelhouse/*.whl
