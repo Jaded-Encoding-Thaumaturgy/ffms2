@@ -1,6 +1,6 @@
 {
   "name": "ffms2",
-  "version-string": "5.1.2",
+  "version-string": "5.2.2",
   "dependencies": [
     {
       "name": "ffmpeg",
