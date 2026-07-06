@@ -36,7 +36,7 @@ jobs:
           commit: "d015e31e90838a4c9dfa3eed45979bc70d9357fc" # renovate: datasource=github-tags depName=microsoft/vcpkg currentValue=2026.05.25 versioning=loose
 
       - name: Build wheels
-        uses: pypa/cibuildwheel@v3.4
+        uses: pypa/cibuildwheel@294735312765b09d24a2fbec22660ce817587d55 # v4.1
         env:
           CIBW_BUILD: cp312-*
           CIBW_BUILD_FRONTEND: build[uv]
