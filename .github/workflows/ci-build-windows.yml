@@ -28,7 +28,7 @@ jobs:
         uses: ./.github/actions/setup-vcpkg
         with:
           triplet: ${{ env.VCPKG_TRIPLET }}
-          commit: "d015e31e90838a4c9dfa3eed45979bc70d9357fc" # renovate: datasource=github-tags depName=microsoft/vcpkg currentValue=2026.05.25 versioning=loose
+          commit: "cd61e1e26a038e82d6550a3ebbe0fbbfe7da78e3" # renovate: datasource=github-tags depName=microsoft/vcpkg currentValue=2026.06.24 versioning=loose
 
       - name: Configure pkg-config
         shell: pwsh
