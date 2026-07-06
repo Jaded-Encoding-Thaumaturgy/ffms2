@@ -1,0 +1,42 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:best-practices",
+    ":automergeMinor",
+    ":automergePr",
+    ":automergeRequireAllStatusChecks",
+    ":disableDependencyDashboard",
+    ":semanticCommits",
+    ":semanticCommitScopeDisabled",
+    ":semanticCommitTypeAll(deps)"
+  ],
+  "schedule": ["* * 1 * *"],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "managerFilePatterns": ["/^\\.github/workflows/ci-build-.*\\.yml$/"],
+      "matchStrings": [
+        "commit:\\s*['\"](?<currentDigest>[0-9a-f]{40})['\"]\\s*#\\s*renovate:\\s*datasource=(?<datasource>[a-zA-Z0-9_-]+)\\s+depName=(?<depName>[^\\s]+)\\s+currentValue=(?<currentValue>[^\\s]+)(?:\\s+versioning=(?<versioning>[^\\s]+))?"
+      ],
+      "autoReplaceStringTemplate": "commit: \"{{{newDigest}}}\" # renovate: datasource={{{datasource}}} depName={{{depName}}} currentValue={{{newValue}}}{{#if versioning}} versioning={{{versioning}}}{{/if}}"
+    }
+  ],
+  "packageRules": [
+    {
+      "extends": [
+        ":semanticCommitTypeAll(ci)"
+      ],
+      "matchManagers": [
+        "github-actions"
+      ]
+    },
+    {
+      "automerge": true,
+      "matchUpdateTypes": [
+        "pin",
+        "digest",
+        "pinDigest"
+      ]
+    }
+  ]
+}
