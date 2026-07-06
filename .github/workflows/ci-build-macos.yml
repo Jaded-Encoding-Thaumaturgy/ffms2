@@ -33,7 +33,7 @@ jobs:
         uses: ./.github/actions/setup-vcpkg
         with:
           triplet: ${{ matrix.vcpkg_triplet }}
-          commit: "d015e31e90838a4c9dfa3eed45979bc70d9357fc" # renovate: datasource=github-tags depName=microsoft/vcpkg currentValue=2026.05.25 versioning=loose
+          commit: "cd61e1e26a038e82d6550a3ebbe0fbbfe7da78e3" # renovate: datasource=github-tags depName=microsoft/vcpkg currentValue=2026.06.24 versioning=loose
 
       - name: Build wheels
         uses: pypa/cibuildwheel@294735312765b09d24a2fbec22660ce817587d55 # v4.1
