@@ -49,7 +49,8 @@ jobs:
           $env:LIB = "$vcpkgRoot\lib;$env:LIB"
           $env:INCLUDE = "$vcpkgRoot\include;$env:INCLUDE"
           $env:PKG_CONFIG_PATH = "$vcpkgRoot\lib\pkgconfig"
-          uv build --wheel -C setup-args=--vsenv -C setup-args="-Db_vscrt=mt"
+          $nativeFile = Join-Path $env:GITHUB_WORKSPACE 'clang-cl.ini'
+          uv build --wheel -C setup-args=--vsenv -C "setup-args=--native-file=$nativeFile" -C setup-args="-Db_vscrt=mt"
 
       - name: Repair wheel tags
         shell: bash
