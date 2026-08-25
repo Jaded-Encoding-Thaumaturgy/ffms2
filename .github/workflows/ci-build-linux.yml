@@ -55,7 +55,7 @@ jobs:
         uses: ./.github/actions/setup-vcpkg
         with:
           triplet: ${{ matrix.vcpkg_triplet }}
-          commit: "9e593bb18ea69cc5095e012465dcd675a822ed0d" # renovate: datasource=github-tags depName=microsoft/vcpkg currentValue=2026.07.29 versioning=loose
+          commit: "ddd0023b0eee70986e42ed49d9d4afb8098f212e" # renovate: datasource=github-tags depName=microsoft/vcpkg currentValue=ddd0023b0eee70986e42ed49d9d4afb8098f212e versioning=loose
 
       - name: Set up vcpkg packages
         run: echo "PKG_CONFIG_PATH=$PWD/vcpkg_installed/${{ matrix.vcpkg_triplet }}/lib/pkgconfig" >> $GITHUB_ENV
