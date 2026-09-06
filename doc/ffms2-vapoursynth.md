@@ -41,7 +41,8 @@ If you want a progress report on the indexing, you can use the supplied `ffmsind
 ### Index
 ```
 ffms2.Index(string source[, string cachefile = source + ".ffindex", int[] indextracks = [],
-    int errorhandling = 3, bint overwrite = False, bint enable_drefs = False, bint use_absolute_path = False])
+    int errorhandling = 3, bint overwrite = False, bint enable_drefs = False, bint use_absolute_path = False,
+    int showprogress = 1])
 ```
 Indexes a number of tracks in a given source file and writes the index file to disk, where it can be picked up and used by `Source`.
 Normally you do not need to call this function manually; it's invoked automatically if necessary by `Source`.
@@ -84,13 +85,21 @@ Corresponds to the FFmpeg demuxer option of the same name. You will know if you 
 ##### bint use_absolute_path = False
 Corresponds to the FFmpeg demuxer option of the same name. You will know if you need it.
 
+##### int showprogress = 1
+Controls indexing progress reporting to VapourSynth's logging system.
+Possible values are:
+
+ - **0**: Disable progress reporting.
+ - **1**: Enable progress reporting (default; throttled to update at most once every 1000 ms).
+ - **> 1**: Enable progress reporting with a custom rate limit interval in milliseconds (e.g. `250` for 250 ms, `5000` for 5 s).
+
 ### Source
 ```
 ffms2.Source(string source[, int track = -1, bint cache = True,
     string cachefile = source + ".ffindex", int fpsnum = -1, int fpsden = 1,
     int threads = -1, string timecodes = "", int seekmode = 1,
     int width = -1, int height = -1, string resizer = "BICUBIC",
-    int format, bint alpha = False])
+    int format, bint alpha = False, int showprogress = 1])
 ```
 Opens video. Will invoke indexing of all video tracks (but no audio tracks) if no valid index file is found.
 
@@ -137,9 +146,9 @@ Mostly useful for getting uncooperative files to work.
 Valid modes are:
 
  - **-1**: Linear access without rewind; i.e. will throw an error if each successive requested frame number isn't bigger than the last one.
-   Only intended for opening images but might work on well with some obscure video format.
+    Only intended for opening images but might work on well with some obscure video format.
  - **0**: Linear access (i.e. if you request frame `n` without having requested all frames from 0 to `n-1` in order first, all frames from 0 to `n` will have to be decoded before `n` can be delivered).
-   The definition of slow, but should make some formats "usable".
+    The definition of slow, but should make some formats "usable".
  - **1**: Safe normal. Bases seeking decisions on the keyframe positions reported by libavformat.
  - **2**: Unsafe normal. Same as mode 1, but no error will be thrown if the exact seek destination has to be guessed.
  - **3**: Aggressive. Seeks in the forward direction even if no closer keyframe is known to exist. Only useful for testing and containers where libavformat doesn't report keyframes properly.
@@ -159,6 +168,14 @@ Convert the output from whatever it was to the given format. If not specified th
 
 ##### bint alpha = False
 Output the alpha channel as a second clip if it is present in the file. When set to True an array of two clips will be returned with alpha in the second one. If there is alpha information present.
+
+##### int showprogress = 1
+Controls indexing progress reporting to VapourSynth's logging system if on-the-fly indexing is required.
+Possible values are:
+
+ - **0**: Disable progress reporting.
+ - **1**: Enable progress reporting (default; throttled to update at most once every 1000 ms).
+ - **> 1**: Enable progress reporting with a custom rate limit interval in milliseconds.
 
 #### Exported VapourSynth frame properties
 There are several useful frame properties that are set. See the VapourSynth manual for a detailed explanation of them.
@@ -180,7 +197,7 @@ There are several useful frame properties that are set. See the VapourSynth manu
 ```
 ffms2.AudioSource(string source[, int track = -1, bint cache = True,
     string cachefile = source + ".ffindex", int adjustdelay = -1,
-    int fillgaps = -1, float drc_scale = 0.0])
+    int fillgaps = -1, float drc_scale = 0.0, int showprogress = 1])
 ```
 Opens the specified audio track in the given source file and outputs it as an audio clip.
 
@@ -213,6 +230,14 @@ Audio gap filling behavior:
 
 ##### float drc_scale = 0.0
 Dynamic range compression scaling factor for AC3/E-AC3 audio streams (0.0 means DRC disabled).
+
+##### int showprogress = 1
+Controls indexing progress reporting to VapourSynth's logging system if on-the-fly indexing is required.
+Possible values are:
+
+ - **0**: Disable progress reporting.
+ - **1**: Enable progress reporting (default; throttled to update at most once every 1000 ms).
+ - **> 1**: Enable progress reporting with a custom rate limit interval in milliseconds.
 
 ### SetLogLevel
 ```
