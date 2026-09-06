@@ -97,3 +97,5 @@ Makefile
 /subprojects/*
 !/subprojects/*.wrap
 !/subprojects/packagefiles
+
+vcpkg_installed/*

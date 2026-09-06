@@ -211,6 +211,124 @@ static void VS_CC CreateSource(const VSMap *in, VSMap *out, void *, VSCore *core
     FFMS_DestroyIndex(Index);
 }
 
+static void VS_CC CreateAudioSource(const VSMap *in, VSMap *out, void *, VSCore *core, const VSAPI *vsapi) {
+    FFMS_Init(0, 0);
+
+    char ErrorMsg[1024];
+    FFMS_ErrorInfo E;
+    E.Buffer = ErrorMsg;
+    E.BufferSize = sizeof(ErrorMsg);
+    int err;
+
+    const char *Source = vsapi->mapGetData(in, "source", 0, nullptr);
+    if (!Source || !*Source)
+        return vsapi->mapSetError(out, "AudioSource: No source specified");
+
+    int Track = vsapi->mapGetIntSaturated(in, "track", 0, &err);
+    if (err)
+        Track = -1;
+    bool Cache = !!vsapi->mapGetInt(in, "cache", 0, &err);
+    if (err)
+        Cache = true;
+    const char *CacheFile = vsapi->mapGetData(in, "cachefile", 0, &err);
+    int AdjustDelay = vsapi->mapGetIntSaturated(in, "adjustdelay", 0, &err);
+    if (err)
+        AdjustDelay = -1;
+    int FillGaps = vsapi->mapGetIntSaturated(in, "fillgaps", 0, &err);
+    if (err)
+        FillGaps = -1;
+    double DrcScale = vsapi->mapGetFloat(in, "drc_scale", 0, &err);
+    if (err)
+        DrcScale = 0;
+
+    if (Track <= -2)
+        return vsapi->mapSetError(out, "AudioSource: No audio track selected");
+
+    FFMS_Index *Index = nullptr;
+    std::string DefaultCache;
+    if (Cache) {
+        if (CacheFile && *CacheFile) {
+            if (IsSamePath(Source, CacheFile))
+                return vsapi->mapSetError(out, "AudioSource: Cache will overwrite the source");
+            Index = FFMS_ReadIndex(CacheFile, &E);
+        } else {
+            DefaultCache = Source;
+            DefaultCache += ".ffindex";
+            CacheFile = DefaultCache.c_str();
+            Index = FFMS_ReadIndex(CacheFile, &E);
+            // Reindex if the index doesn't match the file and its name wasn't explicitly given
+            if (Index && FFMS_IndexBelongsToFile(Index, Source, nullptr) != FFMS_ERROR_SUCCESS) {
+                FFMS_DestroyIndex(Index);
+                Index = nullptr;
+            }
+        }
+    }
+
+    // Index needs to be remade if it is an unindexed audio track
+    if (Index && Track >= 0 && Track < FFMS_GetNumTracks(Index)
+        && FFMS_GetTrackType(FFMS_GetTrackFromIndex(Index, Track)) == FFMS_TYPE_AUDIO
+        && FFMS_GetNumFrames(FFMS_GetTrackFromIndex(Index, Track)) == 0) {
+        FFMS_DestroyIndex(Index);
+        Index = nullptr;
+    }
+
+    // More complicated for finding a default track, reindex the file if at least one audio track exists
+    if (Index && FFMS_GetFirstTrackOfType(Index, FFMS_TYPE_AUDIO, &E) >= 0
+        && FFMS_GetFirstIndexedTrackOfType(Index, FFMS_TYPE_AUDIO, &E) < 0) {
+        for (int i = 0; i < FFMS_GetNumTracks(Index); i++) {
+            if (FFMS_GetTrackType(FFMS_GetTrackFromIndex(Index, i)) == FFMS_TYPE_AUDIO) {
+                FFMS_DestroyIndex(Index);
+                Index = nullptr;
+                break;
+            }
+        }
+    }
+
+    if (!Index) {
+        FFMS_Indexer *Indexer = FFMS_CreateIndexer(Source, &E);
+        if (!Indexer)
+            return vsapi->mapSetError(out, (std::string("Index: ") + E.Buffer).c_str());
+
+        FFMS_TrackTypeIndexSettings(Indexer, FFMS_TYPE_AUDIO, 1, 0);
+
+        Index = FFMS_DoIndexing2(Indexer, FFMS_IEH_CLEAR_TRACK, &E);
+        if (!Index)
+            return vsapi->mapSetError(out, (std::string("Index: ") + E.Buffer).c_str());
+
+        if (Cache)
+            if (FFMS_WriteIndex(CacheFile, Index, &E)) {
+                FFMS_DestroyIndex(Index);
+                return vsapi->mapSetError(out, (std::string("Index: ") + E.Buffer).c_str());
+            }
+    }
+
+    if (Track == -1)
+        Track = FFMS_GetFirstIndexedTrackOfType(Index, FFMS_TYPE_AUDIO, &E);
+    if (Track < 0) {
+        FFMS_DestroyIndex(Index);
+        return vsapi->mapSetError(out, "AudioSource: No audio track found");
+    }
+
+    VSAudioSource4 *as;
+    try {
+        as = new VSAudioSource4(Source, Track, Index, AdjustDelay, FillGaps, DrcScale, vsapi, core);
+    } catch (std::exception const& e) {
+        FFMS_DestroyIndex(Index);
+        return vsapi->mapSetError(out, e.what());
+    }
+
+    VSNode *node = vsapi->createAudioFilter2("AudioSource", as->GetAudioInfo(), VSAudioSource4::GetFrame, VSAudioSource4::Free, fmUnordered, nullptr, 0, as, core);
+    if (!node) {
+        delete as;
+        FFMS_DestroyIndex(Index);
+        return vsapi->mapSetError(out, "AudioSource: Failed to create audio filter node");
+    }
+    as->SetCacheThreshold(vsapi->setLinearFilter(node));
+    vsapi->mapConsumeNode(out, "clip", node, maAppend);
+
+    FFMS_DestroyIndex(Index);
+}
+
 static void VS_CC GetLogLevel(const VSMap *, VSMap *out, void *, VSCore *, const VSAPI *vsapi) {
     vsapi->mapSetInt(out, "level", FFMS_GetLogLevel(), maReplace);
 }
@@ -231,6 +349,7 @@ VS_EXTERNAL_API(void) VapourSynthPluginInit2(VSPlugin *plugin, const VSPLUGINAPI
     vspapi->configPlugin("com.vapoursynth.ffms2", "ffms2", "FFmpegSource 2 for VapourSynth", FFMS_GetVersion(), VAPOURSYNTH_API_VERSION, 0, plugin);
     vspapi->registerFunction("Index", "source:data;cachefile:data:opt;indextracks:int[]:opt;errorhandling:int:opt;overwrite:int:opt;enable_drefs:int:opt;use_absolute_path:int:opt;", "result:data;", CreateIndex, nullptr, plugin);
     vspapi->registerFunction("Source", "source:data;track:int:opt;cache:int:opt;cachefile:data:opt;fpsnum:int:opt;fpsden:int:opt;threads:int:opt;timecodes:data:opt;seekmode:int:opt;width:int:opt;height:int:opt;resizer:data:opt;format:int:opt;alpha:int:opt;", "clip:vnode;", CreateSource, nullptr, plugin);
+    vspapi->registerFunction("AudioSource", "source:data;track:int:opt;cache:int:opt;cachefile:data:opt;adjustdelay:int:opt;fillgaps:int:opt;drc_scale:float:opt;", "clip:anode;", CreateAudioSource, nullptr, plugin);
     vspapi->registerFunction("GetLogLevel", "", "level:int;", GetLogLevel, nullptr, plugin);
     vspapi->registerFunction("SetLogLevel", "level:int;", "level:int;", SetLogLevel, nullptr, plugin);
     vspapi->registerFunction("Version", "", "version:data;", GetVersion, nullptr, plugin);

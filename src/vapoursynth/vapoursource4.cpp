@@ -405,3 +405,168 @@ void VSVideoSource4::OutputAlphaFrame(const FFMS_Frame *Frame, int Plane, VSFram
     vsh::bitblt(vsapi->getWritePtr(Dst, 0), vsapi->getStride(Dst, 0), Frame->Data[Plane], Frame->Linesize[Plane],
         vsapi->getFrameWidth(Dst, 0) * fi->bytesPerSample, vsapi->getFrameHeight(Dst, 0));
 }
+
+VSAudioSource4::VSAudioSource4(const char *SourceFile, int Track, FFMS_Index *Index,
+    int AdjustDelay, int FillGaps, double DrcScale, const VSAPI *vsapi, VSCore *core) {
+
+    AI = {};
+
+    char ErrorMsg[1024];
+    FFMS_ErrorInfo E;
+    E.Buffer = ErrorMsg;
+    E.BufferSize = sizeof(ErrorMsg);
+
+    A = FFMS_CreateAudioSource2(SourceFile, Track, Index, AdjustDelay, FillGaps, DrcScale, &E);
+    if (!A)
+        throw std::runtime_error(std::string("AudioSource: ") + E.Buffer);
+
+    const FFMS_AudioProperties *AP = FFMS_GetAudioProperties(A);
+
+    int sampleType;
+    int bitsPerSample;
+    switch (AP->SampleFormat) {
+    case FFMS_FMT_U8:
+        sampleType = stInteger;
+        bitsPerSample = 8;
+        break;
+    case FFMS_FMT_S16:
+        sampleType = stInteger;
+        bitsPerSample = 16;
+        break;
+    case FFMS_FMT_S32:
+        sampleType = stInteger;
+        bitsPerSample = 32;
+        break;
+    case FFMS_FMT_FLT:
+        sampleType = stFloat;
+        bitsPerSample = 32;
+        break;
+    case FFMS_FMT_DBL:
+        sampleType = stFloat;
+        bitsPerSample = 64;
+        break;
+    default:
+        FFMS_DestroyAudioSource(A);
+        throw std::runtime_error("AudioSource: Unsupported sample format");
+    }
+
+    if (!vsapi->queryAudioFormat(&AI.format, sampleType, bitsPerSample, AP->ChannelLayout, core)) {
+        FFMS_DestroyAudioSource(A);
+        throw std::runtime_error("AudioSource: Unsupported audio format");
+    }
+
+    if (AI.format.numChannels <= 0 || AI.format.numChannels > 64) {
+        FFMS_DestroyAudioSource(A);
+        throw std::runtime_error("AudioSource: Unsupported channel count (must be 1-64)");
+    }
+
+    if (AP->NumSamples <= 0) {
+        FFMS_DestroyAudioSource(A);
+        throw std::runtime_error("AudioSource: Audio track contains no samples");
+    }
+
+    AI.sampleRate = AP->SampleRate;
+    AI.numSamples = AP->NumSamples;
+    AI.numFrames = static_cast<int>((AP->NumSamples + VS_AUDIO_FRAME_SAMPLES - 1) / VS_AUDIO_FRAME_SAMPLES);
+
+    try {
+        InterleavedBuffer.resize(static_cast<size_t>(VS_AUDIO_FRAME_SAMPLES) * AI.format.numChannels * AI.format.bytesPerSample);
+    } catch (...) {
+        FFMS_DestroyAudioSource(A);
+        throw;
+    }
+}
+
+VSAudioSource4::~VSAudioSource4() {
+    FFMS_DestroyAudioSource(A);
+}
+
+const VSAudioInfo *VSAudioSource4::GetAudioInfo() const {
+    return &AI;
+}
+
+void VSAudioSource4::SetCacheThreshold(int threshold) {
+    CacheThreshold = threshold;
+}
+
+const VSFrame *VS_CC VSAudioSource4::GetVSAudioFrame(int n, VSCore *core, const VSAPI *vsapi) {
+    if (n < 0 || n >= AI.numFrames)
+        throw std::runtime_error("AudioSource: Frame index out of range");
+
+    int64_t startSample = static_cast<int64_t>(n) * VS_AUDIO_FRAME_SAMPLES;
+    int count = VS_AUDIO_FRAME_SAMPLES;
+    if (startSample + count > AI.numSamples)
+        count = static_cast<int>(AI.numSamples - startSample);
+    if (count <= 0)
+        throw std::runtime_error("AudioSource: Frame index out of range");
+
+    VSFrame *dst = vsapi->newAudioFrame(&AI.format, count, nullptr, core);
+    if (!dst)
+        throw std::runtime_error("AudioSource: Failed to allocate audio frame");
+
+    char errorMsg[1024];
+    FFMS_ErrorInfo e;
+    e.Buffer = errorMsg;
+    e.BufferSize = sizeof(errorMsg);
+
+    if (FFMS_GetAudio(A, InterleavedBuffer.data(), startSample, count, &e)) {
+        vsapi->freeFrame(dst);
+        throw std::runtime_error(std::string("AudioSource: ") + e.Buffer);
+    }
+
+    uint8_t *dstPointers[64];
+    for (int ch = 0; ch < AI.format.numChannels && ch < 64; ++ch)
+        dstPointers[ch] = vsapi->getWritePtr(dst, ch);
+
+    switch (AI.format.bytesPerSample) {
+    case 1:
+        Deinterleave<uint8_t>(InterleavedBuffer.data(), dstPointers, AI.format.numChannels, count);
+        break;
+    case 2:
+        Deinterleave<uint16_t>(InterleavedBuffer.data(), dstPointers, AI.format.numChannels, count);
+        break;
+    case 4:
+        Deinterleave<uint32_t>(InterleavedBuffer.data(), dstPointers, AI.format.numChannels, count);
+        break;
+    case 8:
+        Deinterleave<uint64_t>(InterleavedBuffer.data(), dstPointers, AI.format.numChannels, count);
+        break;
+    default:
+        vsapi->freeFrame(dst);
+        throw std::runtime_error("AudioSource: Unsupported bytes per sample");
+    }
+
+    return dst;
+}
+
+const VSFrame *VS_CC VSAudioSource4::GetFrame(int n, int activationReason, void *instanceData, void **, VSFrameContext *frameCtx, VSCore *core, const VSAPI *vsapi) {
+    VSAudioSource4 *as = static_cast<VSAudioSource4 *>(instanceData);
+    if (activationReason == arInitial) {
+        if (as->LastFrame < n && as->LastFrame > n - as->CacheThreshold) {
+            for (int i = as->LastFrame + 1; i < n; i++) {
+                try {
+                    const VSFrame *frame = as->GetVSAudioFrame(i, core, vsapi);
+                    vsapi->cacheFrame(frame, i, frameCtx);
+                    vsapi->freeFrame(frame);
+                } catch (std::runtime_error &) {
+                    // don't care if it errors out on frames we don't actually have to deliver
+                }
+            }
+        }
+
+        try {
+            const VSFrame *frame = as->GetVSAudioFrame(n, core, vsapi);
+            as->LastFrame = n;
+            return frame;
+        } catch (std::runtime_error &e) {
+            vsapi->setFilterError(e.what(), frameCtx);
+        }
+    }
+
+    return nullptr;
+}
+
+void VS_CC VSAudioSource4::Free(void *instanceData, VSCore *, const VSAPI *) {
+    delete static_cast<VSAudioSource4 *>(instanceData);
+}
+

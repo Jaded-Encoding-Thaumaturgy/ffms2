@@ -12,7 +12,6 @@ Donate if you like this software.
 Collecting weird clips from the internet and making them play takes more time than you'd think.
 
 ## Limitations
- - No audio support in VapourSynth
  - Because of LAVF's demuxer, most raw streams (such as elementary h264 and other mpeg video streams) will fail to work properly.
  - Interlaced H.264 mostly works these days, but seeking may occasionally result in corruption.
  - Transport Streams will not decode reliably without seekmode -1.
@@ -176,6 +175,44 @@ There are several useful frame properties that are set. See the VapourSynth manu
  - _ColorRange
  - _PictType
  - _FieldBased
+
+### AudioSource
+```
+ffms2.AudioSource(string source[, int track = -1, bint cache = True,
+    string cachefile = source + ".ffindex", int adjustdelay = -1,
+    int fillgaps = -1, float drc_scale = 0.0])
+```
+Opens the specified audio track in the given source file and outputs it as an audio clip.
+
+#### Arguments
+
+##### string source
+The source file to open.
+
+##### int track = -1
+The audio track number to open, as indexed by `Index`. Defaults to -1, which means the first indexed audio track.
+
+##### bint cache = True
+If set to true, `AudioSource` will check if an index file already exists and use it if it does. If no index file exists or if the requested audio track was not indexed, it will automatically index the file, write the index to disk, and then open the track.
+
+##### string cachefile = source + ".ffindex"
+The filename of the index file (where the indexing data is saved).
+
+##### int adjustdelay = -1
+Controls how audio delay is handled:
+ - -1: Adjust delay relative to the first video track (default).
+ - -2: Adjust delay so the first audio sample is at timestamp 0.
+ - -3: Do not adjust audio delay.
+ - >= 0: Adjust delay relative to video track `adjustdelay`.
+
+##### int fillgaps = -1
+Audio gap filling behavior:
+ - -1: Auto (default).
+ - 0: Disabled.
+ - 1: Enabled.
+
+##### float drc_scale = 0.0
+Dynamic range compression scaling factor for AC3/E-AC3 audio streams (0.0 means DRC disabled).
 
 ### SetLogLevel
 ```
