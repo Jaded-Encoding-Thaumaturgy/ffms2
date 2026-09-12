@@ -30,6 +30,8 @@ extern "C" {
 #include <libswscale/swscale.h>
 }
 
+#include <vector>
+
 #include "VapourSynth4.h"
 #include "ffms.h"
 #include "ffmscompat.h"
@@ -62,6 +64,37 @@ public:
 
     static void VS_CC Init(VSMap *in, VSMap *out, void **instanceData, VSNode *node, VSCore *core, const VSAPI *vsapi);
     const VSFrame *VS_CC GetVSFrame(int n, VSCore *core, const VSAPI *vsapi);
+    static const VSFrame *VS_CC GetFrame(int n, int activationReason, void *instanceData, void **frameData, VSFrameContext *frameCtx, VSCore *core, const VSAPI *vsapi);
+    static void VS_CC Free(void *instanceData, VSCore *core, const VSAPI *vsapi);
+};
+
+struct VSAudioSource4 {
+private:
+    VSAudioInfo AI;
+    FFMS_AudioSource *A;
+    int LastFrame = -1;
+    int CacheThreshold = 0;
+    std::vector<uint8_t> InterleavedBuffer;
+
+    template <typename T>
+    static void Deinterleave(const void *srcVoid, uint8_t *const *dstPointers, int numChannels, int numSamples) {
+        const T *src = static_cast<const T *>(srcVoid);
+        for (int i = 0; i < numSamples; ++i) {
+            for (int ch = 0; ch < numChannels; ++ch) {
+                reinterpret_cast<T *>(dstPointers[ch])[i] = *src++;
+            }
+        }
+    }
+
+public:
+    VSAudioSource4(const char *SourceFile, int Track, FFMS_Index *Index,
+        int AdjustDelay, int FillGaps, double DrcScale, const VSAPI *vsapi, VSCore *core);
+    ~VSAudioSource4();
+
+    const VSAudioInfo *GetAudioInfo() const;
+    void SetCacheThreshold(int threshold);
+
+    const VSFrame *VS_CC GetVSAudioFrame(int n, VSCore *core, const VSAPI *vsapi);
     static const VSFrame *VS_CC GetFrame(int n, int activationReason, void *instanceData, void **frameData, VSFrameContext *frameCtx, VSCore *core, const VSAPI *vsapi);
     static void VS_CC Free(void *instanceData, VSCore *core, const VSAPI *vsapi);
 };
