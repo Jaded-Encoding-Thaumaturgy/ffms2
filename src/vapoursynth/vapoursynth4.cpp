@@ -23,12 +23,76 @@
 #include "VSHelper4.h"
 #include "../core/utils.h"
 
+#include <chrono>
 #include <cstdio>
 #include <cstring>
 #include <string>
 #include <set>
 
-static void VS_CC CreateIndex(const VSMap *in, VSMap *out, void *, VSCore *, const VSAPI *vsapi) {
+struct VSIndexProgressTracker {
+    const VSAPI *vsapi;
+    VSCore *core;
+    std::string prefix;
+    std::chrono::milliseconds interval{ 1000 };
+    std::chrono::steady_clock::time_point next_update{ std::chrono::steady_clock::now() };
+    int last_percent = -1;
+    bool enabled = false;
+
+    VSIndexProgressTracker(const VSMap *in, const char *filter_name, VSCore *c, const VSAPI *v)
+        : vsapi(v), core(c), prefix(filter_name) {
+        int err;
+        int show = vsapi->mapGetInt(in, "showprogress", 0, &err);
+        if (err) {
+            enabled = true;
+        } else if (show > 0) {
+            enabled = true;
+            if (show > 1)
+                interval = std::chrono::milliseconds(show);
+        } else {
+            enabled = false;
+        }
+    }
+
+    void Setup(FFMS_Indexer *indexer) {
+        if (enabled && indexer) {
+            FFMS_SetProgressCallback(indexer, Callback, this);
+        }
+    }
+
+    void Finish() {
+        if (enabled && last_percent != -1) {
+            std::string msg = prefix + ": indexing complete";
+            vsapi->logMessage(mtInformation, msg.c_str(), core);
+        }
+    }
+
+private:
+    static int FFMS_CC Callback(int64_t current, int64_t total, void *ic_private) {
+        auto *self = static_cast<VSIndexProgressTracker *>(ic_private);
+        auto now = std::chrono::steady_clock::now();
+        if (now >= self->next_update) {
+            int percent = 0;
+            if (total > 0) {
+                percent = static_cast<int>((static_cast<double>(current) / static_cast<double>(total)) * 100.0);
+                if (percent < 0) percent = 0;
+                if (percent > 100) percent = 100;
+            } else {
+                percent = static_cast<int>(current / (1024 * 1024));
+                if (percent < 0) percent = 0;
+            }
+
+            if (percent != self->last_percent) {
+                std::string msg = self->prefix + ": index progress " + std::to_string(percent) + (total > 0 ? "%" : "MB");
+                self->vsapi->logMessage(mtInformation, msg.c_str(), self->core);
+                self->last_percent = percent;
+                self->next_update = now + self->interval;
+            }
+        }
+        return 0;
+    }
+};
+
+static void VS_CC CreateIndex(const VSMap *in, VSMap *out, void *, VSCore *core, const VSAPI *vsapi) {
     FFMS_Init(0, 0);
 
     char ErrorMsg[1024];
@@ -36,6 +100,8 @@ static void VS_CC CreateIndex(const VSMap *in, VSMap *out, void *, VSCore *, con
     E.Buffer = ErrorMsg;
     E.BufferSize = sizeof(ErrorMsg);
     int err;
+
+    VSIndexProgressTracker progress(in, "Index", core, vsapi);
 
     std::set<int> IndexTracks;
 
@@ -81,9 +147,11 @@ static void VS_CC CreateIndex(const VSMap *in, VSMap *out, void *, VSCore *, con
                 FFMS_TrackIndexSettings(Indexer, i, 1, 0);
         }
 
+        progress.Setup(Indexer);
         Index = FFMS_DoIndexing2(Indexer, ErrorHandling, &E);
         if (!Index)
             return vsapi->mapSetError(out, (std::string("Index: ") + E.Buffer).c_str());
+        progress.Finish();
         if (FFMS_WriteIndex(CacheFile, Index, &E)) {
             FFMS_DestroyIndex(Index);
             return vsapi->mapSetError(out, (std::string("Index: ") + E.Buffer).c_str());
@@ -107,6 +175,8 @@ static void VS_CC CreateSource(const VSMap *in, VSMap *out, void *, VSCore *core
     E.Buffer = ErrorMsg;
     E.BufferSize = sizeof(ErrorMsg);
     int err;
+
+    VSIndexProgressTracker progress(in, "Source", core, vsapi);
 
     const char *Source = vsapi->mapGetData(in, "source", 0, nullptr);
     int Track = vsapi->mapGetIntSaturated(in, "track", 0, &err);
@@ -171,9 +241,11 @@ static void VS_CC CreateSource(const VSMap *in, VSMap *out, void *, VSCore *core
         if (!Indexer)
             return vsapi->mapSetError(out, (std::string("Index: ") + E.Buffer).c_str());
 
+        progress.Setup(Indexer);
         Index = FFMS_DoIndexing2(Indexer, FFMS_IEH_CLEAR_TRACK, &E);
         if (!Index)
             return vsapi->mapSetError(out, (std::string("Index: ") + E.Buffer).c_str());
+        progress.Finish();
 
         if (Cache)
             if (FFMS_WriteIndex(CacheFile, Index, &E)) {
@@ -219,6 +291,8 @@ static void VS_CC CreateAudioSource(const VSMap *in, VSMap *out, void *, VSCore 
     E.Buffer = ErrorMsg;
     E.BufferSize = sizeof(ErrorMsg);
     int err;
+
+    VSIndexProgressTracker progress(in, "AudioSource", core, vsapi);
 
     const char *Source = vsapi->mapGetData(in, "source", 0, nullptr);
     if (!Source || !*Source)
@@ -291,9 +365,11 @@ static void VS_CC CreateAudioSource(const VSMap *in, VSMap *out, void *, VSCore 
 
         FFMS_TrackTypeIndexSettings(Indexer, FFMS_TYPE_AUDIO, 1, 0);
 
+        progress.Setup(Indexer);
         Index = FFMS_DoIndexing2(Indexer, FFMS_IEH_CLEAR_TRACK, &E);
         if (!Index)
             return vsapi->mapSetError(out, (std::string("Index: ") + E.Buffer).c_str());
+        progress.Finish();
 
         if (Cache)
             if (FFMS_WriteIndex(CacheFile, Index, &E)) {
@@ -347,9 +423,9 @@ static void VS_CC GetVersion(const VSMap *, VSMap *out, void *, VSCore *, const 
 
 VS_EXTERNAL_API(void) VapourSynthPluginInit2(VSPlugin *plugin, const VSPLUGINAPI *vspapi) {
     vspapi->configPlugin("com.vapoursynth.ffms2", "ffms2", "FFmpegSource 2 for VapourSynth", FFMS_GetVersion(), VAPOURSYNTH_API_VERSION, 0, plugin);
-    vspapi->registerFunction("Index", "source:data;cachefile:data:opt;indextracks:int[]:opt;errorhandling:int:opt;overwrite:int:opt;enable_drefs:int:opt;use_absolute_path:int:opt;", "result:data;", CreateIndex, nullptr, plugin);
-    vspapi->registerFunction("Source", "source:data;track:int:opt;cache:int:opt;cachefile:data:opt;fpsnum:int:opt;fpsden:int:opt;threads:int:opt;timecodes:data:opt;seekmode:int:opt;width:int:opt;height:int:opt;resizer:data:opt;format:int:opt;alpha:int:opt;", "clip:vnode;", CreateSource, nullptr, plugin);
-    vspapi->registerFunction("AudioSource", "source:data;track:int:opt;cache:int:opt;cachefile:data:opt;adjustdelay:int:opt;fillgaps:int:opt;drc_scale:float:opt;", "clip:anode;", CreateAudioSource, nullptr, plugin);
+    vspapi->registerFunction("Index", "source:data;cachefile:data:opt;indextracks:int[]:opt;errorhandling:int:opt;overwrite:int:opt;enable_drefs:int:opt;use_absolute_path:int:opt;showprogress:int:opt;", "result:data;", CreateIndex, nullptr, plugin);
+    vspapi->registerFunction("Source", "source:data;track:int:opt;cache:int:opt;cachefile:data:opt;fpsnum:int:opt;fpsden:int:opt;threads:int:opt;timecodes:data:opt;seekmode:int:opt;width:int:opt;height:int:opt;resizer:data:opt;format:int:opt;alpha:int:opt;showprogress:int:opt;", "clip:vnode;", CreateSource, nullptr, plugin);
+    vspapi->registerFunction("AudioSource", "source:data;track:int:opt;cache:int:opt;cachefile:data:opt;adjustdelay:int:opt;fillgaps:int:opt;drc_scale:float:opt;showprogress:int:opt;", "clip:anode;", CreateAudioSource, nullptr, plugin);
     vspapi->registerFunction("GetLogLevel", "", "level:int;", GetLogLevel, nullptr, plugin);
     vspapi->registerFunction("SetLogLevel", "level:int;", "level:int;", SetLogLevel, nullptr, plugin);
     vspapi->registerFunction("Version", "", "version:data;", GetVersion, nullptr, plugin);
