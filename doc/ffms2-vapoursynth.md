@@ -121,8 +121,8 @@ If set to false, `Source` will not look for an existing index file; instead all 
 ##### string cachefile = source + ".ffindex"
 The filename of the index file (where the indexing data is saved).
 Defaults to `sourcefilename.ffindex`.
-Note that if you didn't change this parameter from its default value and `Source` encounters an index file that doesn't seem to match the file it's trying to open, it will automatically reindex and then overwrite the old index file.
-On the other hand, if you *do* change it, `Source` will assume you have your reasons and throw an error instead if the index doesn't match the file.
+If `Source` encounters an index file that doesn't match the file it's trying to open (e.g. the source was modified or replaced), it will log a warning, automatically reindex and then overwrite the old index file.
+This applies whether `cachefile` is left at its default value or set explicitly.
 
 ##### int fpsnum = -1, int fpsden = 1
 Controls the framerate of the output; used for VFR to CFR conversions.
@@ -214,6 +214,7 @@ If set to true, `AudioSource` will check if an index file already exists and use
 
 ##### string cachefile = source + ".ffindex"
 The filename of the index file (where the indexing data is saved).
+If the index file doesn't match the source file (e.g. the source was modified or replaced), a warning is logged and the file is reindexed and the index overwritten, whether `cachefile` is left at its default value or set explicitly.
 
 ##### int adjustdelay = -1
 Controls how audio delay is handled:
