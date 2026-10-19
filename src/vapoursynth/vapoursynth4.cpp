@@ -92,6 +92,23 @@ private:
     }
 };
 
+// Returns a valid cached index, or nullptr if stale or unavailable.
+static FFMS_Index *ReadCachedIndex(const char *CacheFile, const char *Source, const char *FilterName, VSCore *core, const VSAPI *vsapi) {
+    char ErrorMsg[1024];
+    FFMS_ErrorInfo E;
+    E.Buffer = ErrorMsg;
+    E.BufferSize = sizeof(ErrorMsg);
+
+    FFMS_Index *Index = FFMS_ReadIndex(CacheFile, &E);
+    if (Index && FFMS_IndexBelongsToFile(Index, Source, &E) != FFMS_ERROR_SUCCESS) {
+        FFMS_DestroyIndex(Index);
+        std::string msg = std::string(FilterName) + ": cached index '" + CacheFile + "' is stale (" + E.Buffer + "), reindexing";
+        vsapi->logMessage(mtWarning, msg.c_str(), core);
+        return nullptr;
+    }
+    return Index;
+}
+
 static void VS_CC CreateIndex(const VSMap *in, VSMap *out, void *, VSCore *core, const VSAPI *vsapi) {
     FFMS_Init(0, 0);
 
@@ -221,19 +238,12 @@ static void VS_CC CreateSource(const VSMap *in, VSMap *out, void *, VSCore *core
         if (CacheFile && *CacheFile) {
             if (IsSamePath(Source, CacheFile))
                 return vsapi->mapSetError(out, "Source: Cache will overwrite the source");
-            Index = FFMS_ReadIndex(CacheFile, &E);
         } else {
             DefaultCache = Source;
             DefaultCache += ".ffindex";
             CacheFile = DefaultCache.c_str();
-            Index = FFMS_ReadIndex(CacheFile, &E);
-            // Reindex if the index doesn't match the file and its name wasn't
-            // explicitly given
-            if (Index && FFMS_IndexBelongsToFile(Index, Source, nullptr) != FFMS_ERROR_SUCCESS) {
-                FFMS_DestroyIndex(Index);
-                Index = nullptr;
-            }
         }
+        Index = ReadCachedIndex(CacheFile, Source, "Source", core, vsapi);
     }
 
     if (!Index) {
@@ -324,18 +334,12 @@ static void VS_CC CreateAudioSource(const VSMap *in, VSMap *out, void *, VSCore 
         if (CacheFile && *CacheFile) {
             if (IsSamePath(Source, CacheFile))
                 return vsapi->mapSetError(out, "AudioSource: Cache will overwrite the source");
-            Index = FFMS_ReadIndex(CacheFile, &E);
         } else {
             DefaultCache = Source;
             DefaultCache += ".ffindex";
             CacheFile = DefaultCache.c_str();
-            Index = FFMS_ReadIndex(CacheFile, &E);
-            // Reindex if the index doesn't match the file and its name wasn't explicitly given
-            if (Index && FFMS_IndexBelongsToFile(Index, Source, nullptr) != FFMS_ERROR_SUCCESS) {
-                FFMS_DestroyIndex(Index);
-                Index = nullptr;
-            }
         }
+        Index = ReadCachedIndex(CacheFile, Source, "AudioSource", core, vsapi);
     }
 
     // Index needs to be remade if it is an unindexed audio track
